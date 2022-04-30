@@ -1,0 +1,382 @@
+---
+title: "Sosial Kependudukan Indonesia"
+runtime: shiny
+output:
+  flexdashboard::flex_dashboard:
+    orientation: rows
+    vertical_layout: fill
+    theme: journal
+    #source_code: embed
+    social: menu
+    navbar:
+    - title: Sumber Data
+      href: https://www.bps.go.id/
+      icon: far fa-clipboard
+resource_files:
+- data/simpindonesia/idn_admbnda_adm1_bps_20200401.dbf
+- data/simpindonesia/idn_admbnda_adm1_bps_20200401.prj
+- data/simpindonesia/idn_admbnda_adm1_bps_20200401.shx
+---
+
+<style>
+body {
+text-align: justify}
+</style>
+
+```{r global, include=FALSE}
+start_time <- Sys.time()
+library(flexdashboard)
+library(tidyverse)
+library(hrbrthemes)
+library(DT)
+library(plotly)
+library(shiny)
+library(rgdal)
+library(dygraphs)
+library(xts)
+library(leaflet)
+library(knitr)
+
+
+data <- read.csv("data/data3.csv")
+ket <- read.csv("data/ket.csv", sep = ";")
+map <- readOGR("data/simpindonesia/idn_admbnda_adm1_bps_20200401.shp")
+
+theme = theme_ipsum() + theme(plot.caption = element_text(hjust=0, size=8),
+                                plot.title = element_text(hjust = 0, size=12, 
+                                                          face="bold"),
+                                axis.title.x = element_text(size=10),
+                                axis.title.y = element_text(size=10))  
+```
+
+# Grafik
+
+Column {.sidebar data-width=300}
+-------------------------------------------------------------------
+**Deskripsi Data**
+
+<h6>Merupakan Data Sosial Kependudukan Indonesia yang disajikan per Provinsi mulai dari tahun 2011 hingga tahun 2020, dalam bentuk :  
+- Peta Interaktif (per peubah per tahun),  
+- Diagram Batang (per peubah per tahun), dan  
+- Diagram Garis (per Peubah)</h6>
+
+***
+
+```{r input1}
+
+selectInput(inputId = "variableselected", label = "Pilih Data",
+            choices = c("IPM","LamaSekolah","PendudukMiskin","AktaKelahiran","PersentaseMerokok","KonsumsiKalori","MelekHuruf","Penerangan","IDI","TeleponGenggam","AnakBekerja"))
+```
+
+```{r text}
+keteranganpeubah <- renderText({
+  obyek<-match(ket$Peubah, input$variableselected)
+  NonNAindex <- which(!is.na(obyek))
+  ket[NonNAindex,]$Keterangan
+})
+```
+
+<h6>`r keteranganpeubah`</h6>
+
+***
+
+```{r input2}
+sliderInput(inputId = "yearselected", label = "Pilih Tahun", min = 2011, max = 2020, value = 2020, sep = "")
+
+#selectInput(inputId = "yearselected", label = "Pilih Tahun", choices = 2011:2020)
+
+```
+
+
+*** 
+
+**Referensi:**
+<h6>
+- Moraga, Paula. (2019). *Geospatial Health Data: Modeling and Visualization with R-INLA and Shiny*. Chapman & Hall/CRC Biostatistics Series
+- Wickham, Hadley. (2020). *Mastering Shiny: Build Interactive Apps, Reports & Dashboards Powered by R*. O'Reilly Media
+</h6>
+
+Row 
+-------------------------------------------------------------------
+### **Peta Choropleth** 
+```{r density}
+start_time_satu <- Sys.time()
+
+renderLeaflet({
+    
+    # Add data to map
+    # CHANGE 1980 by input$yearselected
+    datafiltered <- data[which(data$year == input$yearselected), ]
+    ordercounties <- match(map@data$ADM1_EN, datafiltered$Provinsi)
+    map@data <- datafiltered[ordercounties, ]
+    
+    # Create variableplot
+    # ADD this to create variableplot
+    map$variableplot <- as.numeric(
+      map@data[, input$variableselected])
+    
+    # Create leaflet
+    # CHANGE map$cases by map$variableplot
+    pal <- colorBin("YlOrRd", domain = map$variableplot, bins = 7)
+    
+    # CHANGE map$cases by map$variableplot
+    labels <- sprintf("%s: %g", map$Provinsi, map$variableplot) %>%
+      lapply(htmltools::HTML)
+    
+    # CHANGE cases by variableplot
+    l <- leaflet(map, options = leafletOptions(zoomControl = FALSE,
+                                 minZoom = 4, maxZoom = 4,
+                                 dragging = FALSE)) %>%
+      addTiles() %>%
+      addPolygons(
+        fillColor = ~ pal(variableplot),
+        color = "white",
+        dashArray = "3",
+        fillOpacity = 0.7,
+        label = labels
+      ) %>%
+      # CHANGE cases by variableplot
+      leaflet::addLegend(
+        pal = pal, values = ~variableplot,
+        opacity = 0.7, title = NULL
+      )
+  })
+end_time_satu <- Sys.time()
+
+waktusatu <- round((end_time_satu - start_time_satu),2)
+```
+
+
+
+
+Row 
+-------------------------------------------------------------------
+
+### **Diagram Batang : Selisih dengan Rata-rata Nasional** 
+```{r boxplot}
+start_time_dua <- Sys.time()
+
+renderPlotly({
+
+datafiltered <- data[which(data$year == input$yearselected), ]
+datafiltered$variableplot <- as.numeric(datafiltered[, input$variableselected])
+
+rata <- mean(datafiltered$variableplot, na.rm = TRUE)
+
+datafiltered$variableplot <- datafiltered$variableplot - rata
+
+data_sorted <- datafiltered %>% mutate(Provinsi = fct_reorder(Provinsi,
+                                                      variableplot,
+                                                      .desc = TRUE))
+a <- list(
+  x = 0,
+  y = 17,
+  text = paste("Rata-rata Nasional\n<b>", input$variableselected,"</b>:<b>", round(rata,2),"</b>"),
+  xref = "x",
+  yref = "y",
+  xanchor = 'center',
+  showarrow = F,
+  font = list(color = 'IndianRed',
+                              family = 'Times',
+                              size = 12),
+  bgcolor="white",
+  opacity=0.45
+)
+
+
+p1 <- ggplot(data_sorted,
+             aes(x = round(variableplot,2),
+                 xend = 0,
+                 y = Provinsi,
+                 yend = Provinsi,
+                 colour = Provinsi,
+                 text = paste("Selisih<b>", input$variableselected,"</b>Provinsi<b>",Provinsi,"</b>\n dengan rata-rata nasional adalah<b>", round(variableplot,2), "</b>"))) +
+  geom_segment() +
+  geom_point() +
+  scale_x_continuous(expand = expansion(mult = c(0, 0.1))) +
+  scale_y_discrete(limits = rev) +
+  labs(x = "-",
+       y = "Provinsi") +
+  theme(text = element_text(size=7)) 
+
+ggplotly(p1, res=100, tooltip = "text") %>%
+  layout(showlegend = FALSE) %>%
+  config(displayModeBar = FALSE) %>%
+  style(hoverlabel = list(bgcolor = "white"), hoveron = "fill") %>%
+  layout(annotations = a)
+})
+end_time_dua <- Sys.time()
+
+waktudua <- round((end_time_dua - start_time_dua),2)
+```
+
+
+### **Diagram Garis : Perkembangan Masing-masing Provinsi** 
+```{r bar}
+start_time_tiga <- Sys.time()
+
+renderDygraph({
+    dataxts <- NULL
+    counties <- unique(data$Provinsi)
+    for (l in 1:length(counties)) {
+      dataProvinsi <- data[data$Provinsi == counties[l], ]
+      dd <- xts(
+        dataProvinsi[, input$variableselected],
+        as.Date(paste0(dataProvinsi$year, "-01-01"))
+      )
+      dataxts <- cbind(dataxts, dd)
+    }
+    colnames(dataxts) <- counties
+    
+    dygraph(dataxts) %>%
+      dyHighlight(highlightSeriesBackgroundAlpha = 0.2) -> d1
+    
+    d1$x$css <- "
+ .dygraph-legend > span {display:none;}
+ .dygraph-legend > span.highlight { display: inline; }
+ "
+    d1
+  })
+
+end_time_tiga <- Sys.time()
+
+waktutiga <- round((end_time_tiga - start_time_tiga),2)
+```
+
+
+
+# Tabel
+
+Row 
+-------------------------------------------------------------------
+
+### Peubah
+
+```{r}
+jumlahpeubah = ncol(data)-2
+valueBox(jumlahpeubah, icon = "fa-table")
+```
+
+### Baris Data
+
+```{r}
+jumlahbaris = nrow(data)
+valueBox(jumlahbaris, icon = "fa-server")
+```
+
+### Data
+
+```{r}
+missingdata =  jumlahpeubah*jumlahbaris-sum(is.na(data))
+valueBox(
+  missingdata, icon = "fa-exclamation",
+  color = ifelse(missingdata > 10, "warning", "primary")
+)
+```
+
+Row 
+-------------------------------------------------------------------
+### Data
+
+```{r table}
+renderDT(
+  data,
+    filter = "top",server = FALSE,
+    extensions = c('Buttons', 'Scroller'),
+      options = list(
+        dom = 'Blfrtip',
+        buttons = c('csv', 'excel', 'pdf'),
+        scrollY = '600px',
+        scroller = TRUE
+        )
+    )
+```
+
+
+
+# Tentang
+
+Row {.tabset .tabset-fade}
+-------------------------------------
+    
+### Sosial Kependudukan Indonesia
+    
+Merupakan sebuah Web Servis Interaktif yang dibuat dengan menggunakan R Shiny. Sebagai Tugas Akhir Mata Kuliah STA563-Eksplorasi dan Visualisasi Data di bawah bimbingan Bapak [Dr. Agus M Soleh, S.Si, MT.](https://www.stat.ipb.ac.id/agusms/)
+  
+
+### Kontak
+
+||||
+| -- |-| ----------- |
+|**Address** |:|Jl. Meranti Wing 22 Level 4
+|||Kampus IPB Darmaga|
+|||Bogor 16680, Jawa Barat, Indonesia|
+|**Tlp./Fax**|:| +62 (251) 8624535|
+|**E-mail**|:|statistika@apps.ipb.ac.id|
+|**Hours**|:|Monday—Friday: 08:00–16:00|
+
+### Logs Perubahan
+
+|Tanggal||Versi||Keterangan|
+| -- |-| -- |-|---------------------------------------|
+| 27 Des 2021 |:| Versi 1.0 |:| Presentasi Akhir Mata Kuliah STA563-Eksplorasi dan Visualisasi Data|
+| 28 Des 2021 |:| Versi 1.1 |:| Simplifikasi Shape dari SHP, Semula 68 KB, menjadi 36 KB, Mempercepat Load Peta Choropleth s/d 33% |
+   
+Row
+-------------------------------------
+   
+### Abdul Aziz N - G1501201016
+
+```{r, out.width="50%", out.extra='style="background-color: #9ecff7; padding:10px; display: inline-block;"'}
+include_graphics("www/aan_1.png")
+```
+
+### Rifqi Aulya R - G1501201034
+
+```{r, out.width="50%", out.extra='style="background-color: #9ecff7; padding:10px; display: inline-block;"'}
+include_graphics("www/rar_1.png")
+```
+ 
+### Setia Ningsih M - G1501202057
+
+```{r, out.width="50%", out.extra='style="background-color: #9ecff7; padding:10px; display: inline-block;"'}
+include_graphics("www/snm_1.png")
+```
+
+
+Column
+-------------------------------------------------------------------
+
+### Waktu Proses Peta Choropleth
+
+```{r}
+valueBox(value = tags$p(paste(waktusatu, "detik")), icon = "fa-map")
+```
+
+### Waktu Proses Diagram Batang
+
+```{r}
+valueBox(value = tags$p(paste(waktudua, "detik")), icon = "fa-hourglass")
+```
+
+### Waktu Proses Diagram Garis
+
+```{r}
+valueBox(
+  value = tags$p(paste(waktutiga, "detik")), icon = "fa-clock",
+  color = ifelse(waktutiga > 10, "warning", "primary")
+)
+```
+
+### Waktu Proses Keseluruhan
+
+```{r}
+end_time <- Sys.time()
+waktu <- round((end_time - start_time),2)
+valueBox(
+    value = tags$p(paste(waktu, "detik")),
+     icon = "fa-thumbs-up", color = "success" 
+)
+```
+
+
