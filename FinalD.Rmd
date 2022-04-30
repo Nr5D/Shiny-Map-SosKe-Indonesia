@@ -1,12 +1,12 @@
 ---
-title: "Sosial Kependudukan Indonesia"
+title: "Sosial Kependudukan Indonesia v1.1"
 runtime: shiny
 output:
   flexdashboard::flex_dashboard:
     orientation: rows
     vertical_layout: fill
     theme: journal
-    #source_code: embed
+    source_code: embed
     social: menu
     navbar:
     - title: Sumber Data
@@ -302,6 +302,12 @@ Row {.tabset .tabset-fade}
 ### Sosial Kependudukan Indonesia
     
 Merupakan sebuah Web Servis Interaktif yang dibuat dengan menggunakan R Shiny. Sebagai Tugas Akhir Mata Kuliah STA563-Eksplorasi dan Visualisasi Data di bawah bimbingan Bapak [Dr. Agus M Soleh, S.Si, MT.](https://www.stat.ipb.ac.id/agusms/)
+
+**Dosen Pengampu Mata Kuliah** :
+
+- [Dr. Anwar Fitrianto, M. Sc](https://www.stat.ipb.ac.id/en/index.php?page=dr-anwar-fitrianto)  
+- [Dr. Bagus Sartono, M. Si](https://www.stat.ipb.ac.id/en/index.php?page=dr-bagus-sartono)  
+- [Dr. Agus M Soleh, S.Si, MT.](https://www.stat.ipb.ac.id/agusms/)
   
 
 ### Kontak
@@ -318,7 +324,7 @@ Merupakan sebuah Web Servis Interaktif yang dibuat dengan menggunakan R Shiny. S
 ### Logs Perubahan
 
 |Tanggal||Versi||Keterangan|
-| -- |-| -- |-|---------------------------------------|
+| ------ |-| ---- |-|-------------------------------------------|
 | 27 Des 2021 |:| Versi 1.0 |:| Presentasi Akhir Mata Kuliah STA563-Eksplorasi dan Visualisasi Data|
 | 28 Des 2021 |:| Versi 1.1 |:| Simplifikasi Shape dari SHP, Semula 68 KB, menjadi 36 KB, Mempercepat Load Peta Choropleth s/d 33% |
    
